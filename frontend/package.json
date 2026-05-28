@@ -1,0 +1,19 @@
+{
+  "name": "study-efficiency-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "VITE_API_BASE_URL=/study-api vite build --base=/study/",
+    "preview": "vite preview --host 0.0.0.0",
+    "test:motion": "node tests/motion-tracker.test.mjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "vite": "^7.2.4",
+    "vue": "^3.5.25",
+    "vant": "^4.9.24"
+  },
+  "devDependencies": {}
+}

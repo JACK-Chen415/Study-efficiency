@@ -1,0 +1,18 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: study_efficiency_mysql
+    environment:
+      MYSQL_DATABASE: study_efficiency
+      MYSQL_USER: study_user
+      MYSQL_PASSWORD: study_password
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - study_efficiency_mysql_data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+volumes:
+  study_efficiency_mysql_data:
+

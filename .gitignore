@@ -1,0 +1,48 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Node / Vite
+node_modules/
+dist/
+build/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local databases and generated data
+*.db
+*.sqlite
+*.sqlite3
+data/processed/
+
+# Local model artifacts
+*.joblib
+*.pkl
+models/
+
+# OS / editor / local tooling
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+.codex/
+.agents/
+.git-local/
+*:Zone.Identifier
