@@ -26,6 +26,7 @@ TaskType = Literal[
 ]
 EfficiencyLabel = Literal["low", "medium", "high"]
 TimePeriod = Literal["morning", "afternoon", "evening", "late_night"]
+DataSource = Literal["real", "demo", "mock", "test"]
 
 
 class ORMModel(BaseModel):
@@ -175,3 +176,126 @@ class SessionDeleteResponse(BaseModel):
     archived_id: int
     deleted_at: datetime
     message: str
+
+
+class ModelTrainRequest(BaseModel):
+    model_type: Literal["random_forest_classifier"] = "random_forest_classifier"
+    test_size: float = Field(default=0.25, gt=0, lt=1)
+    random_state: int = 42
+    data_source: DataSource = "real"
+
+
+class ModelTrainResponse(BaseModel):
+    model_version: str
+    sample_count: int
+    status: Literal["trained"]
+    data_source: DataSource
+    label_distribution: dict[str, int]
+    valid_for_research_conclusion: bool
+    warnings: list[str] = []
+    metrics: dict
+    dummy_baseline: dict
+
+
+class ModelPredictRequest(BaseModel):
+    session_id: int = Field(..., gt=0)
+
+
+class ModelMetricsResponse(BaseModel):
+    model_version: str
+    trained_at: str
+    status: str
+    data_source: DataSource
+    sample_count: int
+    label_distribution: dict[str, int]
+    valid_for_research_conclusion: bool
+    warnings: list[str] = []
+    evaluation: Optional[dict] = None
+    metrics: Optional[dict] = None
+    dummy_baseline: Optional[dict] = None
+
+
+class FeatureImportanceItem(BaseModel):
+    rank: int
+    feature_name: str
+    importance_score: float
+
+
+class FeatureImportanceResponse(BaseModel):
+    model_version: str
+    items: list[FeatureImportanceItem]
+
+
+class AnalyticsOverviewResponse(BaseModel):
+    user_id: int
+    total_sessions: int
+    total_duration_minutes: int
+    avg_duration_minutes: Optional[float] = None
+    avg_efficiency_score: Optional[float] = None
+    high_efficiency_ratio: float
+    label_distribution: dict[str, int]
+    motion_available_count: int
+    latest_session_at: Optional[datetime] = None
+    latest_prediction: Optional[PredictionResponse] = None
+    data_scope: str
+
+
+class AnalyticsTrendItem(BaseModel):
+    date: str
+    session_count: int
+    duration_minutes: int
+    avg_duration_minutes: Optional[float] = None
+    avg_efficiency_score: Optional[float] = None
+    high_efficiency_ratio: float
+
+
+class AnalyticsTrendResponse(BaseModel):
+    user_id: int
+    items: list[AnalyticsTrendItem]
+
+
+class TimePeriodAnalysisItem(BaseModel):
+    time_period: TimePeriod
+    session_count: int
+    duration_minutes: int
+    avg_duration_minutes: Optional[float] = None
+    avg_efficiency_score: Optional[float] = None
+    high_efficiency_ratio: float
+
+
+class MotionEfficiencyPoint(BaseModel):
+    session_id: int
+    start_time: datetime
+    move_count: int
+    shake_count: int
+    still_ratio: Optional[float] = None
+    efficiency_score: int
+    efficiency_label: EfficiencyLabel
+
+
+class AnalyticsRuleSuggestion(BaseModel):
+    code: str
+    title: str
+    message: str
+    trigger_count: int
+    active: bool
+
+
+class AnalyticsModelSnapshot(BaseModel):
+    available: bool
+    model_version: Optional[str] = None
+    data_source: Optional[DataSource] = None
+    sample_count: Optional[int] = None
+    valid_for_research_conclusion: bool = False
+    metrics: Optional[dict] = None
+    warnings: list[str] = []
+    feature_importance: list[FeatureImportanceItem] = []
+
+
+class AnalyticsFactorAnalysisResponse(BaseModel):
+    user_id: int
+    sample_count: int
+    time_periods: list[TimePeriodAnalysisItem]
+    motion_efficiency_points: list[MotionEfficiencyPoint]
+    rule_suggestions: list[AnalyticsRuleSuggestion]
+    model_snapshot: AnalyticsModelSnapshot

@@ -1,7 +1,13 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
+import {
+  getAnalyticsFactorAnalysis,
+  getAnalyticsOverview,
+  getAnalyticsTrend,
+} from './api/analytics'
 import { uploadMotion } from './api/motion'
+import { predictSession, trainModel } from './api/model'
 import { simpleLogin } from './api/users'
 import {
   abandonSession,
@@ -43,6 +49,29 @@ const labelMap = {
   low: '低效率',
   medium: '中等效率',
   high: '高效率',
+}
+
+const timePeriodMap = {
+  morning: '上午',
+  afternoon: '下午',
+  evening: '晚上',
+  late_night: '深夜',
+}
+
+const featureNameMap = {
+  duration_minutes: '学习时长',
+  goal_clarity: '目标清晰度',
+  light_level: '光照感受',
+  noise_level: '噪声程度',
+  fatigue_level: '疲劳程度',
+  mood_stress: '心情/压力',
+  phone_distraction: '手机干扰',
+  move_count: '移动次数',
+  shake_count: '晃动次数',
+  still_ratio: '静止占比',
+  avg_acceleration: '平均加速度',
+  max_acceleration: '最大加速度',
+  motion_available: '运动特征可用',
 }
 
 const statusMap = {
@@ -140,6 +169,9 @@ const view = ref(user.value ? 'home' : 'login')
 const loading = ref(false)
 const sessionRestoring = ref(Boolean(user.value?.id && pendingActiveSession.value?.id))
 const recordsLoading = ref(false)
+const dashboardLoading = ref(false)
+const trainingModel = ref(false)
+const predictingSessionId = ref(null)
 const deletingRecordId = ref(null)
 const editingRecordId = ref(null)
 const activeScaleHelp = ref('')
@@ -148,6 +180,9 @@ const noticeMessage = ref('')
 const noticeTone = ref('info')
 const records = ref([])
 const total = ref(0)
+const analyticsOverview = ref(null)
+const analyticsTrend = ref([])
+const analyticsFactors = ref(null)
 const now = ref(Date.now())
 const appBackStack = ref([])
 const pageVisible = ref(typeof document === 'undefined' ? true : !document.hidden)
@@ -260,6 +295,28 @@ const hasEndFormDraft = computed(() => {
 const hasEditFormDraft = computed(() => {
   if (!editFormSnapshot.value) return false
   return JSON.stringify(editFormSnapshot.value) !== JSON.stringify(snapshotEditForm())
+})
+const dashboardReady = computed(() => Boolean(analyticsOverview.value || analyticsTrend.value.length || analyticsFactors.value))
+const maxTrendDuration = computed(() => Math.max(1, ...analyticsTrend.value.map((item) => item.duration_minutes || 0)))
+const maxTrendScore = computed(() => Math.max(5, ...analyticsTrend.value.map((item) => item.avg_efficiency_score || 0)))
+const maxPeriodDuration = computed(() =>
+  Math.max(1, ...(analyticsFactors.value?.time_periods || []).map((item) => item.duration_minutes || 0)),
+)
+const maxFeatureImportance = computed(() =>
+  Math.max(0.0001, ...(analyticsFactors.value?.model_snapshot?.feature_importance || []).map((item) => item.importance_score || 0)),
+)
+const motionScatterBounds = computed(() => {
+  const points = analyticsFactors.value?.motion_efficiency_points || []
+  return {
+    maxMove: Math.max(1, ...points.map((item) => item.move_count || 0)),
+    maxScore: 5,
+  }
+})
+const latestPrediction = computed(() => analyticsOverview.value?.latest_prediction || null)
+const topActiveSuggestions = computed(() => {
+  const suggestions = analyticsFactors.value?.rule_suggestions || []
+  const active = suggestions.filter((item) => item.active)
+  return active.length ? active : suggestions.slice(0, 2)
 })
 
 onMounted(() => {
@@ -555,6 +612,9 @@ function setView(nextView) {
   if (nextView === 'history') {
     refreshRecords()
   }
+  if (nextView === 'dashboard') {
+    refreshDashboard()
+  }
   window.requestAnimationFrame(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   })
@@ -615,6 +675,7 @@ function replaceBrowserState() {
 
 function getBackTarget(currentView = view.value) {
   if (currentView === 'history') return 'home'
+  if (currentView === 'dashboard') return 'home'
   if (currentView === 'study') return 'home'
   if (currentView === 'end') return 'study'
   if (currentView === 'edit') return 'history'
@@ -836,6 +897,9 @@ function handleLogout() {
   clearActiveSession()
   records.value = []
   total.value = 0
+  analyticsOverview.value = null
+  analyticsTrend.value = []
+  analyticsFactors.value = null
   releaseWakeLock()
   go('login', { resetStack: true })
 }
@@ -914,6 +978,109 @@ function recordStatusClass(record) {
   return record.efficiency_label || record.status || 'pending'
 }
 
+function labelText(label) {
+  return labelMap[label] || label || '-'
+}
+
+function timePeriodText(period) {
+  return timePeriodMap[period] || period || '-'
+}
+
+function featureText(featureName) {
+  if (!featureName) return '-'
+  const normalized = String(featureName).split('_').slice(0, 2).join('_')
+  return featureNameMap[featureName] || featureNameMap[normalized] || featureName
+}
+
+function formatPercent(value) {
+  return `${Math.round((Number(value) || 0) * 100)}%`
+}
+
+function barPercent(value, maxValue) {
+  return `${Math.max(4, Math.round(((Number(value) || 0) / Math.max(1, Number(maxValue) || 1)) * 100))}%`
+}
+
+function scatterStyle(point) {
+  const bounds = motionScatterBounds.value
+  const x = ((Number(point.move_count) || 0) / bounds.maxMove) * 92 + 4
+  const y = 96 - ((Number(point.efficiency_score) || 0) / bounds.maxScore) * 88
+  return {
+    left: `${Math.max(4, Math.min(96, x))}%`,
+    top: `${Math.max(8, Math.min(94, y))}%`,
+  }
+}
+
+async function refreshDashboard() {
+  if (!user.value?.id) return
+  clearError()
+  dashboardLoading.value = true
+  try {
+    const [overview, trend, factors, history] = await Promise.all([
+      getAnalyticsOverview(user.value.id),
+      getAnalyticsTrend(user.value.id),
+      getAnalyticsFactorAnalysis(user.value.id),
+      listSessions({ userId: user.value.id }),
+    ])
+    analyticsOverview.value = overview
+    analyticsTrend.value = trend.items || []
+    analyticsFactors.value = factors
+    records.value = history.items || []
+    total.value = history.total || 0
+  } catch (error) {
+    setError(error)
+  } finally {
+    dashboardLoading.value = false
+  }
+}
+
+async function handleTrainDemoModel() {
+  clearError()
+  trainingModel.value = true
+  try {
+    const result = await trainModel({ data_source: 'mock' })
+    const sourceText = result.data_source === 'real' ? '真实数据' : 'mock/demo 数据'
+    const message = `模型训练完成：${sourceText} ${result.sample_count} 条样本。`
+    setNotice(message, result.valid_for_research_conclusion ? 'success' : 'warning')
+    showToast({ message, wordBreak: 'break-word' })
+    await refreshDashboard()
+  } catch (error) {
+    setError(error)
+  } finally {
+    trainingModel.value = false
+  }
+}
+
+async function handlePredictLatest() {
+  if (!records.value.length) {
+    await refreshRecords()
+  }
+  const completed = records.value.find((record) => record.status === 'completed' && record.efficiency_score)
+  if (!completed?.id) {
+    setError(new Error('暂无可预测的已完成学习记录。'))
+    return
+  }
+  predictingSessionId.value = completed.id
+  try {
+    await predictSession({ session_id: completed.id })
+    showToast('预测结果已生成')
+    await refreshRecords()
+    await refreshDashboard()
+  } catch (error) {
+    setError(error)
+  } finally {
+    predictingSessionId.value = null
+  }
+}
+
+async function tryPredictCompletedSession(sessionId) {
+  try {
+    await predictSession({ session_id: sessionId })
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function handleEndSubmit() {
   clearError()
   const validationError = validateEndForm()
@@ -955,6 +1122,11 @@ async function handleEndSubmit() {
       }
     }
 
+    const predicted = await tryPredictCompletedSession(sessionId)
+    if (predicted) {
+      completedNotice += ' 预测结果已生成。'
+    }
+
     activeSession.value = null
     clearActiveSession()
     releaseWakeLock()
@@ -992,7 +1164,7 @@ async function handleAbandonStudy() {
   try {
     await showConfirmDialog({
       title: '放弃本次学习',
-      message: '放弃后，本次学习不会进入有效学习记录，确定放弃吗？',
+      message: '放弃后，本次学习不会进入有效学习记录，也不会参与模型训练。确定放弃吗？',
       confirmButtonText: '放弃',
       confirmButtonColor: '#c63d4b',
       cancelButtonText: '取消',
@@ -1203,6 +1375,7 @@ async function handleDeleteRecord(record) {
           </van-button>
           <van-button v-else round block type="primary" @click="continueActiveStudy">继续当前学习</van-button>
           <van-button round block plain type="primary" @click="go('history')">查看历史记录</van-button>
+          <van-button round block plain type="primary" @click="go('dashboard')">分析看板</van-button>
         </div>
 
         <section class="guide-panel" aria-labelledby="guide-title">
@@ -1426,6 +1599,222 @@ async function handleDeleteRecord(record) {
               </div>
             </dl>
           </article>
+        </div>
+      </section>
+
+      <section v-else-if="view === 'dashboard'" class="screen dashboard-screen">
+        <div class="section-title with-action">
+          <div>
+            <h2>分析看板</h2>
+            <p>仅统计已完成且未放弃的学习记录；mock/demo 模型结果只用于流程演示。</p>
+          </div>
+          <van-button size="small" plain type="primary" :loading="dashboardLoading" @click="refreshDashboard">刷新</van-button>
+        </div>
+
+        <van-loading v-if="dashboardLoading && !dashboardReady" class="center-loading" />
+        <van-empty v-else-if="!dashboardReady || analyticsOverview?.total_sessions === 0" description="暂无可分析的已完成记录。" />
+        <div v-else class="dashboard-stack">
+          <section class="stats-grid" aria-label="总览统计">
+            <article class="stat-tile">
+              <span>总学习次数</span>
+              <strong>{{ analyticsOverview.total_sessions }}</strong>
+            </article>
+            <article class="stat-tile">
+              <span>总学习时长</span>
+              <strong>{{ analyticsOverview.total_duration_minutes }}</strong>
+              <small>分钟</small>
+            </article>
+            <article class="stat-tile">
+              <span>平均效率评分</span>
+              <strong>{{ analyticsOverview.avg_efficiency_score || '-' }}</strong>
+            </article>
+            <article class="stat-tile">
+              <span>高效学习占比</span>
+              <strong>{{ formatPercent(analyticsOverview.high_efficiency_ratio) }}</strong>
+            </article>
+          </section>
+
+          <section class="dashboard-panel">
+            <div class="panel-heading">
+              <div>
+                <h3>预测结果</h3>
+                <p>展示最近一次模型预测；无预测时可手动生成。</p>
+              </div>
+              <van-button
+                size="small"
+                plain
+                type="primary"
+                :loading="Boolean(predictingSessionId)"
+                @click="handlePredictLatest"
+              >
+                预测最近记录
+              </van-button>
+            </div>
+            <div v-if="latestPrediction" class="prediction-box">
+              <div>
+                <span>预测等级</span>
+                <strong :class="['prediction-label', latestPrediction.predicted_label]">
+                  {{ labelText(latestPrediction.predicted_label) }}
+                </strong>
+              </div>
+              <div>
+                <span>置信度</span>
+                <strong>{{ formatPercent(latestPrediction.confidence) }}</strong>
+              </div>
+              <p>{{ latestPrediction.suggestion }}</p>
+            </div>
+            <p v-else class="empty-hint">当前还没有预测结果。若已经训练模型，可先点击“预测最近记录”。</p>
+          </section>
+
+          <section class="dashboard-panel">
+            <div class="panel-heading">
+              <div>
+                <h3>学习趋势</h3>
+                <p>按日期聚合学习时长和平均效率评分。</p>
+              </div>
+            </div>
+            <div class="trend-list">
+              <div v-for="item in analyticsTrend" :key="item.date" class="trend-row">
+                <span class="trend-date">{{ item.date.slice(5) }}</span>
+                <div class="trend-bars">
+                  <div class="trend-bar duration">
+                    <i :style="{ width: barPercent(item.duration_minutes, maxTrendDuration) }"></i>
+                    <span>{{ item.duration_minutes }} 分钟</span>
+                  </div>
+                  <div class="trend-bar score">
+                    <i :style="{ width: barPercent(item.avg_efficiency_score, maxTrendScore) }"></i>
+                    <span>评分 {{ item.avg_efficiency_score || '-' }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="dashboard-panel">
+            <div class="panel-heading">
+              <div>
+                <h3>时段效率对比</h3>
+                <p>比较不同开始时段的学习时长与效率。</p>
+              </div>
+            </div>
+            <div class="period-grid">
+              <article v-for="item in analyticsFactors.time_periods" :key="item.time_period" class="period-item">
+                <div class="period-top">
+                  <strong>{{ timePeriodText(item.time_period) }}</strong>
+                  <span>{{ item.session_count }} 次</span>
+                </div>
+                <div class="period-meter">
+                  <i :style="{ width: barPercent(item.duration_minutes, maxPeriodDuration) }"></i>
+                </div>
+                <dl>
+                  <div>
+                    <dt>时长</dt>
+                    <dd>{{ item.duration_minutes }} 分钟</dd>
+                  </div>
+                  <div>
+                    <dt>均分</dt>
+                    <dd>{{ item.avg_efficiency_score || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>高效占比</dt>
+                    <dd>{{ formatPercent(item.high_efficiency_ratio) }}</dd>
+                  </div>
+                </dl>
+              </article>
+            </div>
+          </section>
+
+          <section class="dashboard-panel">
+            <div class="panel-heading">
+              <div>
+                <h3>特征重要性</h3>
+                <p v-if="analyticsFactors.model_snapshot.available">
+                  模型版本：{{ analyticsFactors.model_snapshot.model_version }} · 数据来源：{{ analyticsFactors.model_snapshot.data_source }}
+                </p>
+                <p v-else>尚未训练模型，可用 mock 数据先验证答辩演示链路。</p>
+              </div>
+              <van-button size="small" plain type="primary" :loading="trainingModel" @click="handleTrainDemoModel">
+                训练演示模型
+              </van-button>
+            </div>
+            <section
+              v-if="analyticsFactors.model_snapshot.available && !analyticsFactors.model_snapshot.valid_for_research_conclusion"
+              class="status-banner warning dashboard-warning"
+            >
+              当前模型不可作为真实学习效率结论，只用于系统流程演示。
+            </section>
+            <div v-if="analyticsFactors.model_snapshot.available" class="model-metrics-grid">
+              <div>
+                <span>训练样本</span>
+                <strong>{{ analyticsFactors.model_snapshot.sample_count || '-' }}</strong>
+              </div>
+              <div>
+                <span>Accuracy</span>
+                <strong>{{ analyticsFactors.model_snapshot.metrics?.accuracy ?? '-' }}</strong>
+              </div>
+              <div>
+                <span>F1 Macro</span>
+                <strong>{{ analyticsFactors.model_snapshot.metrics?.f1_macro ?? '-' }}</strong>
+              </div>
+              <div>
+                <span>真实结论</span>
+                <strong>{{ analyticsFactors.model_snapshot.valid_for_research_conclusion ? '可谨慎使用' : '不可使用' }}</strong>
+              </div>
+            </div>
+            <div v-if="analyticsFactors.model_snapshot.feature_importance.length" class="feature-bars">
+              <div
+                v-for="item in analyticsFactors.model_snapshot.feature_importance"
+                :key="item.feature_name"
+                class="feature-row"
+              >
+                <span>{{ featureText(item.feature_name) }}</span>
+                <div>
+                  <i :style="{ width: barPercent(item.importance_score, maxFeatureImportance) }"></i>
+                </div>
+                <strong>{{ item.importance_score.toFixed(3) }}</strong>
+              </div>
+            </div>
+            <p v-else class="empty-hint">暂无特征重要性。训练模型后这里会显示前 10 个特征。</p>
+          </section>
+
+          <section class="dashboard-panel">
+            <div class="panel-heading">
+              <div>
+                <h3>运动次数与效率关系</h3>
+                <p>横轴为移动次数，纵轴为效率评分；仅展示有运动特征的记录。</p>
+              </div>
+            </div>
+            <div v-if="analyticsFactors.motion_efficiency_points.length" class="scatter-plot">
+              <span class="axis-label y">效率评分</span>
+              <span class="axis-label x">移动次数</span>
+              <button
+                v-for="point in analyticsFactors.motion_efficiency_points"
+                :key="point.session_id"
+                :class="['scatter-dot', point.efficiency_label]"
+                :style="scatterStyle(point)"
+                type="button"
+                :title="`移动 ${point.move_count} 次，评分 ${point.efficiency_score}`"
+                :aria-label="`移动 ${point.move_count} 次，评分 ${point.efficiency_score}`"
+              />
+            </div>
+            <p v-else class="empty-hint">暂无带运动特征的已完成记录；缺失运动数据不会影响总览统计。</p>
+          </section>
+
+          <section class="dashboard-panel">
+            <div class="panel-heading">
+              <div>
+                <h3>规则建议</h3>
+                <p>基于疲劳、手机干扰、目标清晰度、噪声和深夜学习触发。</p>
+              </div>
+            </div>
+            <div class="suggestion-list">
+              <article v-for="item in topActiveSuggestions" :key="item.code" :class="['suggestion-item', item.active ? 'active' : '']">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.trigger_count }} 条触发</span>
+                <p>{{ item.message }}</p>
+              </article>
+            </div>
+          </section>
         </div>
       </section>
 

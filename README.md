@@ -2,7 +2,7 @@
 
 本项目面向大学生个人自习场景，以手机网页为轻量采集入口，记录学习时长、自报告状态和可选的手机运动特征，进而训练学习效率三分类模型并在数据看板中展示趋势与解释结果。
 
-当前已完成项目控制文档、后端 P0 API、手机端前端核心闭环、可选的 DeviceMotionEvent 运动特征采集与上传，以及模型训练前的数据准备脚本。正式模型训练、预测接口和数据看板仍在后续 milestone 中实现。
+当前已完成项目控制文档、后端 P0 API、手机端前端核心闭环、可选的 DeviceMotionEvent 运动特征采集与上传、模型训练前的数据准备脚本、后端模型训练/预测接口，以及前端分析看板。
 
 ## MVP 闭环
 
@@ -14,7 +14,7 @@ flowchart LR
     C --> D
     D --> E[特征工程与随机森林分类]
     E --> F[效率预测与解释]
-    F --> G[ECharts 数据看板]
+    F --> G[分析看板]
 ```
 
 效率标签规则：
@@ -31,7 +31,7 @@ flowchart LR
 
 | 层级 | 计划技术 | 用途 |
 | --- | --- | --- |
-| 前端 | Vue 3 + Vite + 移动端 UI 组件库 + ECharts | 手机端打卡、表单和看板 |
+| 前端 | Vue 3 + Vite + 移动端 UI 组件库 | 手机端打卡、表单和轻量看板 |
 | 设备感知 | `DeviceMotionEvent` | 可选采集运动辅助特征 |
 | 后端 | Python + FastAPI + Pydantic + SQLAlchemy | REST API、数据校验和服务编排 |
 | 数据库 | MySQL | 存储用户、学习会话、运动特征与预测 |
@@ -69,7 +69,8 @@ Study-efficiency/
 3. **已完成：手机端前端核心闭环。** 初始化 Vue 3 + Vite，完成 simple-login、开始学习、计时、结束表单和历史记录。
 4. **已完成：运动检测与上传。** 接入 DeviceMotionEvent，统计聚合运动特征并上传后端；不支持传感器时保持主流程可用。
 5. **已完成：模型训练前准备。** 提供训练数据 CSV 导出、demo/mock seed 数据和训练前数据质量检查。
-6. **下一步：模型与看板。** 在数据积累后训练、记录实验并展示预测与分析结果。
+6. **已完成：模型训练与预测接口。** 提供 `/api/model/train`、`/api/model/predict`、`/api/model/metrics` 和 `/api/model/feature-importance`。
+7. **已完成：数据看板。** 展示总览、趋势、时段对比、特征重要性、运动关系、预测结果和规则建议。
 
 ## 本地启动
 
@@ -102,6 +103,8 @@ python ml/check_dataset.py
 python ml/seed_demo_data.py
 ```
 
-如本地没有真实采集数据，可先运行 `python ml/seed_demo_data.py` 生成单独的 demo/mock SQLite 数据库，再用该数据库验证导出流程。demo/mock 数据只用于开发测试，不得写成真实实验结论；详细说明见 [docs/DATA_PREP.md](docs/DATA_PREP.md)。
+如本地没有足量真实采集数据，可先运行 `python ml/seed_demo_data.py` 生成单独的 demo/mock SQLite 数据库，再用该数据库验证导出、训练和预测流程。demo/mock 数据只用于开发测试，不得写成真实实验结论；详细说明见 [docs/DATA_PREP.md](docs/DATA_PREP.md)。
+
+2026-06-18 已从 Jahon 远端部署拉取真实数据库到 `data/real/study_efficiency_jahon_20260618.db`，当前真实 completed 样本为 17 条，未达到正式训练建议阈值；另生成 120 条 mock 数据用于课程答辩演示系统闭环。
 
 开始任何开发 milestone 前，请先阅读 [docs/PLAN.md](docs/PLAN.md)、[docs/TASKS.md](docs/TASKS.md)、[docs/API_SPEC.md](docs/API_SPEC.md) 和 [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)，并遵循 [AGENTS.md](AGENTS.md)。

@@ -107,8 +107,11 @@
 - [x] 编写真实数据采集规范。
 - [x] 编写演示脚本草案。
 - [x] 编写截图清单。
+- [x] 完成采集前科研设计审查。
+- [x] 根据采集前审查更新采集规范文档。
 - [x] npm run build 通过。
-- [ ] 开始真实数据采集，目标本周至少 20 条。
+- [x] 拉取 Jahon 远端真实采集数据库到本地隔离目录并完成质检。
+- [ ] 继续真实数据采集，目标至少 50 条有效 completed 记录。
 
 ### P1
 
@@ -131,21 +134,22 @@
 - [x] 增加 demo/mock seed 数据脚本。
 - [x] 增加训练前数据质量检查脚本。
 - [x] 检查是否满足最低训练样本数 30。
-- [ ] 处理类别特征 One-Hot。
-- [ ] 训练 RandomForestClassifier。
-- [ ] 输出 Accuracy。
-- [ ] 输出 Precision。
-- [ ] 输出 Recall。
-- [ ] 输出 F1-score。
-- [ ] 输出混淆矩阵。
-- [ ] 输出特征重要性。
-- [ ] 保存模型 latest.joblib。
-- [ ] 实现 POST /api/model/train。
-- [ ] 实现 POST /api/model/predict。
-- [ ] 实现 GET /api/model/metrics。
-- [ ] 实现 GET /api/model/feature-importance。
-- [ ] 数据不足时返回明确提示。
-- [ ] 将训练结果写入 docs/EXPERIMENT_LOG.md。
+- [x] 更新训练前数据就绪检查与实验记录模板。
+- [x] 处理类别特征 One-Hot（Milestone 4B：离线训练脚本）。
+- [x] 训练 RandomForestClassifier（Milestone 4B：离线训练脚本）。
+- [x] 输出 Accuracy（Milestone 4B：离线训练脚本）。
+- [x] 输出 Precision（Milestone 4B：离线训练脚本）。
+- [x] 输出 Recall（Milestone 4B：离线训练脚本）。
+- [x] 输出 F1-score（Milestone 4B：离线训练脚本）。
+- [x] 输出混淆矩阵（Milestone 4B：离线训练脚本）。
+- [x] 输出特征重要性（Milestone 4B：离线训练脚本）。
+- [x] 保存模型 latest.joblib（Milestone 4B：离线训练脚本；模型 artifact 不提交）。
+- [x] 实现 POST /api/model/train。
+- [x] 实现 POST /api/model/predict。
+- [x] 实现 GET /api/model/metrics。
+- [x] 实现 GET /api/model/feature-importance。
+- [x] 数据不足时返回明确提示（Milestone 4B：离线训练脚本与模型 API）。
+- [x] 将训练结果写入 docs/EXPERIMENT_LOG.md。
 
 ### P1
 
@@ -159,19 +163,19 @@
 
 ### P0
 
-- [ ] 实现 GET /api/analytics/overview。
-- [ ] 实现 GET /api/analytics/trend。
-- [ ] 实现 GET /api/analytics/factor-analysis。
-- [ ] 前端实现总览统计卡片。
-- [ ] 前端实现学习时长趋势图。
-- [ ] 前端实现效率评分趋势图。
-- [ ] 前端实现时间段效率对比图。
-- [ ] 前端实现特征重要性图。
-- [ ] 前端实现运动次数与效率散点图。
-- [ ] 前端展示预测等级。
-- [ ] 前端展示预测置信度。
-- [ ] 前端展示系统建议。
-- [ ] 实现规则建议：
+- [x] 实现 GET /api/analytics/overview。
+- [x] 实现 GET /api/analytics/trend。
+- [x] 实现 GET /api/analytics/factor-analysis。
+- [x] 前端实现总览统计卡片。
+- [x] 前端实现学习时长趋势图。
+- [x] 前端实现效率评分趋势图。
+- [x] 前端实现时间段效率对比图。
+- [x] 前端实现特征重要性图。
+- [x] 前端实现运动次数与效率散点图。
+- [x] 前端展示预测等级。
+- [x] 前端展示预测置信度。
+- [x] 前端展示系统建议。
+- [x] 实现规则建议：
   - 高疲劳建议
   - 强手机干扰建议
   - 目标清晰度低建议
@@ -181,7 +185,7 @@
 
 ### P1
 
-- [ ] 增加模型指标展示区。
+- [x] 增加模型指标展示区。
 - [ ] 增加混淆矩阵展示。
 - [ ] 增加记录详情页。
 
@@ -193,7 +197,7 @@
 
 - [ ] 冻结功能，不再新增大模块。
 - [ ] 修复核心流程 bug。
-- [ ] 补齐演示数据，目标至少 50 条。
+- [x] 补齐演示数据，目标至少 50 条。
 - [ ] 整理系统截图。
 - [ ] 整理数据库截图。
 - [ ] 整理 API 文档截图。

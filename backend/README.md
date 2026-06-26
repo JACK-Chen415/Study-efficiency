@@ -1,6 +1,6 @@
 # Backend
 
-FastAPI backend for the Study Efficiency MVP. This milestone implements the core P0 data path only:
+FastAPI backend for the Study Efficiency MVP. The backend currently implements the core P0 data path:
 
 1. simple-login by nickname
 2. start a study session
@@ -8,8 +8,10 @@ FastAPI backend for the Study Efficiency MVP. This milestone implements the core
 4. abandon an unfinished study session without deleting it
 5. list and inspect study sessions
 6. upload and fetch aggregated motion features
+7. train/read/predict with the RandomForest MVP model
+8. return dashboard analytics for overview, trend, factor analysis, model snapshot, and rule suggestions
 
-No frontend, model training, prediction endpoints, dashboard endpoints, password login, or JWT auth are implemented in this milestone.
+Password login and JWT auth are not implemented in this milestone.
 
 ## Structure
 
@@ -95,3 +97,16 @@ pytest
 ```
 
 The tests cover simple-login, session start/end/abandon/list/detail, motion feature upsert and 404 behavior.
+
+## Model API
+
+Install the ML dependencies from `requirements.txt`, then use:
+
+```bash
+POST /api/model/train
+POST /api/model/predict
+GET /api/model/metrics
+GET /api/model/feature-importance
+```
+
+Training uses completed, non-abandoned sessions in the configured database. Real data with fewer than 30 completed labeled sessions returns a clear `422` response. Demo/mock data may be used for flow validation, but must not be reported as a real learning-efficiency conclusion.

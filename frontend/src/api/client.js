@@ -14,11 +14,11 @@ function normalizeErrorMessage(status, body) {
   if (status === 409 && body?.detail === 'user already has an in-progress session') {
     return '已有未结束的学习会话，请先结束当前学习。'
   }
-  if (status === 422) {
-    return '表单字段校验失败，请补全或修正后重试。'
-  }
   if (body && typeof body.detail === 'string') {
     return body.detail
+  }
+  if (status === 422) {
+    return '表单字段校验失败，请补全或修正后重试。'
   }
   if (Array.isArray(body?.detail)) {
     return '表单字段校验失败，请补全或修正后重试。'

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from .config import get_settings
 from .database import init_db
-from .routers import motion, sessions, users
+from .routers import analytics, model, motion, sessions, users
 
 
 settings = get_settings()
@@ -27,4 +27,5 @@ def health_check() -> dict[str, str]:
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 app.include_router(motion.router, prefix="/api/motion", tags=["motion"])
-
+app.include_router(model.router, prefix="/api/model", tags=["model"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
