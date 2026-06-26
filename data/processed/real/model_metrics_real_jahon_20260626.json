@@ -1,0 +1,134 @@
+{
+  "model_version": "rf_20260627_000112",
+  "trained_at": "2026-06-27T00:01:13",
+  "status": "success",
+  "dataset": "data/processed/real/training_dataset_real_jahon_20260626.csv",
+  "data_source": "real",
+  "sample_count": 19,
+  "label_distribution": {
+    "low": 4,
+    "medium": 11,
+    "high": 4
+  },
+  "valid_for_research_conclusion": false,
+  "warning": null,
+  "warnings": [
+    "真实样本数 19 少于 30，不适合形成正式研究结论。"
+  ],
+  "target_column": "efficiency_label",
+  "excluded_columns": [
+    "efficiency_score",
+    "session_id",
+    "user_id"
+  ],
+  "feature_columns": [
+    "duration_minutes",
+    "time_period",
+    "location",
+    "task_type",
+    "goal_clarity",
+    "light_level",
+    "noise_level",
+    "fatigue_level",
+    "mood_stress",
+    "phone_distraction",
+    "move_count",
+    "shake_count",
+    "still_ratio",
+    "avg_acceleration",
+    "max_acceleration",
+    "motion_available"
+  ],
+  "categorical_features": [
+    "time_period",
+    "location",
+    "task_type"
+  ],
+  "numeric_features": [
+    "duration_minutes",
+    "goal_clarity",
+    "light_level",
+    "noise_level",
+    "fatigue_level",
+    "mood_stress",
+    "phone_distraction",
+    "move_count",
+    "shake_count",
+    "still_ratio",
+    "avg_acceleration",
+    "max_acceleration",
+    "motion_available"
+  ],
+  "skipped_rows": 0,
+  "invalid_numeric_values": 0,
+  "evaluation": {
+    "mode": "stratified_train_test_split",
+    "random_state": 42,
+    "train_sample_count": 14,
+    "test_sample_count": 5,
+    "labels": [
+      "low",
+      "medium",
+      "high"
+    ]
+  },
+  "random_forest": {
+    "accuracy": 0.6,
+    "precision_macro": 0.388889,
+    "precision_weighted": 0.5,
+    "recall_macro": 0.555556,
+    "recall_weighted": 0.6,
+    "f1_macro": 0.444444,
+    "f1_weighted": 0.533333,
+    "confusion_matrix": [
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        1,
+        2,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ]
+    ]
+  },
+  "dummy_baseline": {
+    "accuracy": 0.6,
+    "precision_macro": 0.2,
+    "precision_weighted": 0.36,
+    "recall_macro": 0.333333,
+    "recall_weighted": 0.6,
+    "f1_macro": 0.25,
+    "f1_weighted": 0.45,
+    "confusion_matrix": [
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        3,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ]
+    ]
+  },
+  "model": {
+    "type": "RandomForestClassifier",
+    "n_estimators": 200,
+    "class_weight": "balanced",
+    "bundle_path": "/home/win/Project/Study-efficiency/models/latest.joblib"
+  },
+  "feature_importance_output": "data/processed/real/feature_importance_real_jahon_20260626.csv"
+}
