@@ -560,6 +560,26 @@ input:focus-visible,
   box-shadow: 0 0 0 3px rgba(31, 138, 112, 0.1);
 }
 
+.select-field input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #d6dfe8;
+  border-radius: var(--radius);
+  padding: 0 12px;
+  color: var(--text);
+  background:
+    linear-gradient(180deg, #fff, #f9fbfa);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  font-size: 15px;
+}
+
+.select-field input:hover,
+.select-field input:focus {
+  border-color: rgba(31, 138, 112, 0.55);
+  box-shadow: 0 0 0 3px rgba(31, 138, 112, 0.1);
+  outline: none;
+}
+
 .scale-list {
   display: grid;
   gap: 12px;

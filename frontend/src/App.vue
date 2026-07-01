@@ -1789,16 +1789,21 @@ async function handleDeleteRecord(record) {
                 <label class="select-field">
                   <span>学习时段</span>
                   <select v-model="predictNextForm.time_period" required>
+                    <option value="" disabled>请选择</option>
                     <option v-for="item in timePeriodOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
                   </select>
                 </label>
-                <van-field
-                  v-model.number="predictNextForm.duration_minutes"
-                  label="目标时长"
-                  type="digit"
-                  placeholder="分钟"
-                  :rules="[{ required: true, message: '请输入目标时长' }]"
-                />
+                <label class="select-field">
+                  <span>目标时长（分钟）</span>
+                  <input
+                    v-model.number="predictNextForm.duration_minutes"
+                    type="number"
+                    min="1"
+                    max="480"
+                    placeholder="请输入时长"
+                    required
+                  />
+                </label>
               </van-cell-group>
 
               <div class="scale-list">
