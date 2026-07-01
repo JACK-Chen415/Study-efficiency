@@ -36,6 +36,13 @@ const locationOptions = [
   { label: '其他', value: 'other' },
 ]
 
+const timePeriodOptions = [
+  { label: '上午', value: 'morning' },
+  { label: '下午', value: 'afternoon' },
+  { label: '晚上', value: 'evening' },
+  { label: '深夜', value: 'late_night' },
+]
+
 const taskTypeOptions = [
   { label: '课程作业', value: 'coursework' },
   { label: '考试复习', value: 'exam_review' },
@@ -196,6 +203,7 @@ const predictNextResult = ref(null)
 const predictNextForm = reactive({
   location: '',
   task_type: '',
+  time_period: '',
   duration_minutes: 60,
   goal_clarity: 3,
   light_level: 3,
@@ -1098,6 +1106,7 @@ async function handlePredictLatest() {
 function resetPredictNextForm() {
   predictNextForm.location = ''
   predictNextForm.task_type = ''
+  predictNextForm.time_period = autoTimePeriod.value
   predictNextForm.duration_minutes = 60
   predictNextForm.goal_clarity = 3
   predictNextForm.light_level = 3
@@ -1120,7 +1129,7 @@ async function handlePredictNext() {
       location: predictNextForm.location,
       task_type: predictNextForm.task_type,
       duration_minutes: predictNextForm.duration_minutes,
-      time_period: autoTimePeriod.value,
+      time_period: predictNextForm.time_period,
       goal_clarity: predictNextForm.goal_clarity,
       light_level: predictNextForm.light_level,
       noise_level: predictNextForm.noise_level,
@@ -1777,6 +1786,12 @@ async function handleDeleteRecord(record) {
                     <option v-for="item in taskTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
                   </select>
                 </label>
+                <label class="select-field">
+                  <span>学习时段</span>
+                  <select v-model="predictNextForm.time_period" required>
+                    <option v-for="item in timePeriodOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                  </select>
+                </label>
                 <van-field
                   v-model.number="predictNextForm.duration_minutes"
                   label="目标时长"
@@ -1785,10 +1800,6 @@ async function handleDeleteRecord(record) {
                   :rules="[{ required: true, message: '请输入目标时长' }]"
                 />
               </van-cell-group>
-
-              <div class="status-banner info" style="margin: 0 16px 12px; font-size: 13px;">
-                时段自动识别为「{{ timePeriodMap[autoTimePeriod] }}」
-              </div>
 
               <div class="scale-list">
                 <div
