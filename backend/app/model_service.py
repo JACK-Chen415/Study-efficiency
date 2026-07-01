@@ -569,6 +569,163 @@ def load_model_bundle() -> dict[str, Any]:
     return deps["joblib"].load(MODEL_BUNDLE_PATH)
 
 
+PREDICT_NEXT_FEATURE_COLUMNS = [
+    "duration_minutes",
+    "time_period",
+    "location",
+    "task_type",
+    "goal_clarity",
+    "light_level",
+    "noise_level",
+    "fatigue_level",
+    "mood_stress",
+    "phone_distraction",
+]
+
+
+def time_period_from_hour(hour: int) -> str:
+    if hour < 12:
+        return "morning"
+    if hour < 18:
+        return "afternoon"
+    if hour < 22:
+        return "evening"
+    return "late_night"
+
+
+FEATURE_FIELD_LABELS = {
+    "goal_clarity": "目标清晰度",
+    "light_level": "光照感受",
+    "noise_level": "噪声程度",
+    "fatigue_level": "疲劳程度",
+    "mood_stress": "心情/压力",
+    "phone_distraction": "手机干扰",
+}
+
+
+def build_predict_next_values(params: dict[str, Any]) -> list[Any]:
+    time_period = params.get("time_period") or time_period_from_hour(datetime.now().hour)
+    row: dict[str, Any] = {
+        "duration_minutes": params.get("duration_minutes", 60),
+        "time_period": time_period,
+        "location": params.get("location", "other"),
+        "task_type": params.get("task_type", "other"),
+        "goal_clarity": params.get("goal_clarity", 3),
+        "light_level": params.get("light_level", 3),
+        "noise_level": params.get("noise_level", 3),
+        "fatigue_level": params.get("fatigue_level", 3),
+        "mood_stress": params.get("mood_stress", 3),
+        "phone_distraction": params.get("phone_distraction", 3),
+        "move_count": 0,
+        "shake_count": 0,
+        "still_ratio": 0,
+        "avg_acceleration": 0,
+        "max_acceleration": 0,
+        "motion_available": 0,
+    }
+    values: list[Any] = []
+    for feature in TRAINING_FEATURE_COLUMNS:
+        if feature in CATEGORICAL_FEATURE_COLUMNS:
+            values.append(clean_categorical(row.get(feature)))
+        else:
+            value, _ = parse_float(row.get(feature))
+            values.append(value)
+    return values
+
+
+def generate_feature_suggestions(
+    params: dict[str, Any],
+    predicted_label: str,
+    pipeline: Any,
+    labels: list[str],
+) -> list[dict[str, Any]]:
+    label_order = ["low", "medium", "high"]
+    current_index = label_order.index(predicted_label) if predicted_label in label_order else 1
+    if current_index >= 2:
+        return []
+
+    adjustable_fields = [
+        "goal_clarity",
+        "light_level",
+        "noise_level",
+        "fatigue_level",
+        "mood_stress",
+        "phone_distraction",
+    ]
+
+    suggestions: list[dict[str, Any]] = []
+    for field in adjustable_fields:
+        current_value = params.get(field, 3)
+        if current_value <= 1:
+            continue
+
+        best_new_value = current_value
+        for try_value in range(current_value - 1, 0, -1):
+            trial_params = dict(params)
+            trial_params[field] = try_value
+            trial_values = build_predict_next_values(trial_params)
+            proba = pipeline.predict_proba([trial_values])[0]
+            pred_index = max(range(len(proba)), key=lambda i: float(proba[i]))
+            pred_label = str(labels[pred_index])
+            if label_order.index(pred_label) > current_index:
+                best_new_value = try_value
+                break
+
+        if best_new_value < current_value:
+            new_params = dict(params)
+            new_params[field] = best_new_value
+            new_values = build_predict_next_values(new_params)
+            proba = pipeline.predict_proba([new_values])[0]
+            pred_index = max(range(len(proba)), key=lambda i: float(proba[i]))
+            new_label = str(labels[pred_index])
+            suggestions.append({
+                "field": field,
+                "field_label": FEATURE_FIELD_LABELS.get(field, field),
+                "current_value": current_value,
+                "suggested_value": best_new_value,
+                "impact": f"{label_order[current_index]} → {new_label}",
+            })
+
+    suggestions.sort(key=lambda s: label_order.index(s["impact"].split(" → ")[1]) if " → " in s["impact"] else 0, reverse=True)
+    return suggestions
+
+
+def predict_next_session(params: dict[str, Any]) -> dict[str, Any]:
+    bundle = load_model_bundle()
+    pipeline = bundle["pipeline"]
+    metadata = bundle.get("metadata", {})
+    labels = list(getattr(pipeline.named_steps["classifier"], "classes_", EFFICIENCY_LABEL_ORDER))
+
+    values = build_predict_next_values(params)
+    probabilities = pipeline.predict_proba([values])[0]
+    best_index = max(range(len(probabilities)), key=lambda index: float(probabilities[index]))
+    predicted_label = str(labels[best_index])
+    confidence = round(float(probabilities[best_index]), 4)
+
+    suggestions = generate_feature_suggestions(params, predicted_label, pipeline, labels)
+
+    base_suggestions: list[str] = []
+    if params.get("fatigue_level", 3) >= 4:
+        base_suggestions.append("疲劳程度较高，建议先短暂休息再开始学习。")
+    if params.get("phone_distraction", 3) >= 4:
+        base_suggestions.append("手机干扰偏强，建议开启勿扰模式或把手机放远。")
+    if params.get("goal_clarity", 3) <= 2:
+        base_suggestions.append("目标清晰度偏低，建议先写下本轮要完成的具体任务。")
+    if params.get("noise_level", 3) >= 4:
+        base_suggestions.append("噪声较高，建议更换座位或使用降噪耳机。")
+    if not base_suggestions and predicted_label == "high":
+        base_suggestions.append("当前计划环境接近高效率状态，建议保持。")
+    if not base_suggestions:
+        base_suggestions.append("建议优先保持目标明确、降低手机干扰，以提升学习效率。")
+
+    return {
+        "predicted_label": predicted_label,
+        "confidence": confidence,
+        "suggestion": " ".join(base_suggestions),
+        "feature_suggestions": suggestions,
+    }
+
+
 def row_values_for_prediction(session: models.StudySession) -> list[Any]:
     row = session_to_row(session, session.motion_features)
     values: list[Any] = []

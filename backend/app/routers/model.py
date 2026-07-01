@@ -11,6 +11,7 @@ from ..model_service import (
     NotEnoughTrainingDataError,
     load_feature_importance,
     load_metrics,
+    predict_next_session,
     predict_session,
     train_model,
 )
@@ -49,6 +50,28 @@ def predict(payload: schemas.ModelPredictRequest, db: Session = Depends(get_db))
     except ModelServiceError as exc:
         _raise_service_error(exc)
     return prediction
+
+
+@router.post("/predict-next", response_model=schemas.ModelPredictNextResponse)
+def predict_next(payload: schemas.ModelPredictNextRequest):
+    params = {
+        "location": payload.location,
+        "task_type": payload.task_type,
+        "duration_minutes": payload.duration_minutes,
+        "goal_clarity": payload.goal_clarity,
+        "light_level": payload.light_level,
+        "noise_level": payload.noise_level,
+        "fatigue_level": payload.fatigue_level,
+        "mood_stress": payload.mood_stress,
+        "phone_distraction": payload.phone_distraction,
+    }
+    try:
+        result = predict_next_session(params)
+    except ModelUnavailableError as exc:
+        _raise_service_error(exc)
+    except ModelServiceError as exc:
+        _raise_service_error(exc)
+    return result
 
 
 @router.get("/metrics", response_model=schemas.ModelMetricsResponse)

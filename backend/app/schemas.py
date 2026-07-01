@@ -201,6 +201,33 @@ class ModelPredictRequest(BaseModel):
     session_id: int = Field(..., gt=0)
 
 
+class ModelPredictNextRequest(BaseModel):
+    location: Location
+    task_type: TaskType
+    duration_minutes: int = Field(..., ge=1, le=480)
+    goal_clarity: int = Field(..., ge=1, le=5)
+    light_level: int = Field(..., ge=1, le=5)
+    noise_level: int = Field(..., ge=1, le=5)
+    fatigue_level: int = Field(..., ge=1, le=5)
+    mood_stress: int = Field(..., ge=1, le=5)
+    phone_distraction: int = Field(..., ge=1, le=5)
+
+
+class FeatureSuggestion(BaseModel):
+    field: str
+    field_label: str
+    current_value: int
+    suggested_value: int
+    impact: str
+
+
+class ModelPredictNextResponse(BaseModel):
+    predicted_label: EfficiencyLabel
+    confidence: float
+    suggestion: str
+    feature_suggestions: list[FeatureSuggestion]
+
+
 class ModelMetricsResponse(BaseModel):
     model_version: str
     trained_at: str

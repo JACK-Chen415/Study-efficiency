@@ -14,6 +14,13 @@ export function predictSession(payload) {
   })
 }
 
+export function predictNext(payload) {
+  return request('/model/predict-next', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function getModelMetrics() {
   return request('/model/metrics')
 }

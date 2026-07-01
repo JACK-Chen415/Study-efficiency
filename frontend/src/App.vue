@@ -7,7 +7,7 @@ import {
   getAnalyticsTrend,
 } from './api/analytics'
 import { uploadMotion } from './api/motion'
-import { predictSession, trainModel } from './api/model'
+import { predictNext, predictSession, trainModel } from './api/model'
 import { simpleLogin } from './api/users'
 import {
   abandonSession,
@@ -191,6 +191,19 @@ const backgroundPauseSeconds = ref(0)
 const backgroundWarning = ref('')
 const wakeLockStatus = ref('idle')
 const editFormSnapshot = ref(null)
+const predictingNext = ref(false)
+const predictNextResult = ref(null)
+const predictNextForm = reactive({
+  location: '',
+  task_type: '',
+  duration_minutes: 60,
+  goal_clarity: 3,
+  light_level: 3,
+  noise_level: 3,
+  fatigue_level: 3,
+  mood_stress: 3,
+  phone_distraction: 3,
+})
 
 let timer = null
 let browserHistoryReady = false
@@ -318,6 +331,16 @@ const topActiveSuggestions = computed(() => {
   const active = suggestions.filter((item) => item.active)
   return active.length ? active : suggestions.slice(0, 2)
 })
+
+const autoTimePeriod = computed(() => {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'morning'
+  if (hour < 18) return 'afternoon'
+  if (hour < 22) return 'evening'
+  return 'late_night'
+})
+
+const predictNextReady = computed(() => Boolean(predictNextForm.location && predictNextForm.task_type))
 
 onMounted(() => {
   timer = window.setInterval(() => {
@@ -1072,6 +1095,100 @@ async function handlePredictLatest() {
   }
 }
 
+function resetPredictNextForm() {
+  predictNextForm.location = ''
+  predictNextForm.task_type = ''
+  predictNextForm.duration_minutes = 60
+  predictNextForm.goal_clarity = 3
+  predictNextForm.light_level = 3
+  predictNextForm.noise_level = 3
+  predictNextForm.fatigue_level = 3
+  predictNextForm.mood_stress = 3
+  predictNextForm.phone_distraction = 3
+  predictNextResult.value = null
+}
+
+async function handlePredictNext() {
+  if (!predictNextForm.location || !predictNextForm.task_type) {
+    setError(new Error('请先选择学习地点和任务类型。'))
+    return
+  }
+  clearError()
+  predictingNext.value = true
+  try {
+    const result = await predictNext({
+      location: predictNextForm.location,
+      task_type: predictNextForm.task_type,
+      duration_minutes: predictNextForm.duration_minutes,
+      time_period: autoTimePeriod.value,
+      goal_clarity: predictNextForm.goal_clarity,
+      light_level: predictNextForm.light_level,
+      noise_level: predictNextForm.noise_level,
+      fatigue_level: predictNextForm.fatigue_level,
+      mood_stress: predictNextForm.mood_stress,
+      phone_distraction: predictNextForm.phone_distraction,
+    })
+    predictNextResult.value = result
+  } catch (error) {
+    setError(error)
+  } finally {
+    predictingNext.value = false
+  }
+}
+
+async function handleStartWithPrediction() {
+  if (!predictNextForm.location || !predictNextForm.task_type) {
+    setError(new Error('请先选择学习地点和任务类型。'))
+    return
+  }
+  if (!user.value?.id) {
+    setError(new Error('请先输入昵称进入系统。'))
+    go('login')
+    return
+  }
+  clearError()
+  clearNotice()
+  loading.value = true
+  try {
+    const session = await startSession({ user_id: user.value.id })
+    activeSession.value = normalizeActiveSession(session)
+    saveActiveSession(activeSession.value)
+    beginMotionSession()
+    requestWakeLock()
+
+    endForm.location = predictNextForm.location
+    endForm.task_type = predictNextForm.task_type
+    endForm.goal_clarity = predictNextForm.goal_clarity
+    endForm.light_level = predictNextForm.light_level
+    endForm.noise_level = predictNextForm.noise_level
+    endForm.fatigue_level = predictNextForm.fatigue_level
+    endForm.mood_stress = predictNextForm.mood_stress
+    endForm.phone_distraction = predictNextForm.phone_distraction
+    endForm.efficiency_score = 3
+
+    showToast('已开始学习，环境参数已预填。')
+    go('study')
+  } catch (error) {
+    if (error?.status === 409) {
+      try {
+        const recovered = await recoverOpenSessionFromList()
+        if (recovered) {
+          const message = '检测到已有未结束学习，已恢复。'
+          setNotice(message, 'info')
+          showToast({ message, wordBreak: 'break-word' })
+          go('study', { resetStack: true, backStack: ['home'] })
+          return
+        }
+      } catch {
+        // Fall through to the original 409 message.
+      }
+    }
+    setError(error)
+  } finally {
+    loading.value = false
+  }
+}
+
 async function tryPredictCompletedSession(sessionId) {
   try {
     await predictSession({ session_id: sessionId })
@@ -1370,9 +1487,14 @@ async function handleDeleteRecord(record) {
           <van-button v-if="sessionRestoring" round block type="primary" loading disabled>
             正在校验学习状态
           </van-button>
-          <van-button v-else-if="!hasActiveSession" round block type="primary" :loading="loading" @click="handleStart">
-            开始学习
-          </van-button>
+          <template v-else-if="!hasActiveSession">
+            <van-button round block type="primary" :loading="loading" @click="go('dashboard')">
+              预测下一次学习效率
+            </van-button>
+            <van-button round block plain type="primary" :loading="loading" @click="handleStart">
+              直接开始学习
+            </van-button>
+          </template>
           <van-button v-else round block type="primary" @click="continueActiveStudy">继续当前学习</van-button>
           <van-button round block plain type="primary" @click="go('history')">查看历史记录</van-button>
           <van-button round block plain type="primary" @click="go('dashboard')">分析看板</van-button>
@@ -1637,33 +1759,105 @@ async function handleDeleteRecord(record) {
           <section class="dashboard-panel">
             <div class="panel-heading">
               <div>
-                <h3>预测结果</h3>
-                <p>展示最近一次模型预测；无预测时可手动生成。</p>
+                <h3>预测下一次学习效率</h3>
+                <p>填写计划的学习环境，模型将根据历史数据预测预期效率。</p>
               </div>
-              <van-button
-                size="small"
-                plain
-                type="primary"
-                :loading="Boolean(predictingSessionId)"
-                @click="handlePredictLatest"
-              >
-                预测最近记录
-              </van-button>
             </div>
-            <div v-if="latestPrediction" class="prediction-box">
+
+            <van-form @submit="handlePredictNext">
+              <van-cell-group inset style="margin-bottom: 12px;">
+                <label class="select-field">
+                  <span>学习地点</span>
+                  <select v-model="predictNextForm.location" required>
+                    <option value="" disabled>请选择</option>
+                    <option v-for="item in locationOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                  </select>
+                </label>
+                <label class="select-field">
+                  <span>任务类型</span>
+                  <select v-model="predictNextForm.task_type" required>
+                    <option value="" disabled>请选择</option>
+                    <option v-for="item in taskTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                  </select>
+                </label>
+                <van-field
+                  v-model.number="predictNextForm.duration_minutes"
+                  label="目标时长"
+                  type="digit"
+                  placeholder="分钟"
+                  :rules="[{ required: true, message: '请输入目标时长' }]"
+                />
+              </van-cell-group>
+
+              <div class="status-banner info" style="margin: 0 16px 12px; font-size: 13px;">
+                时段自动识别为「{{ timePeriodMap[autoTimePeriod] }}」
+              </div>
+
+              <div class="scale-list">
+                <div
+                  v-for="field in scaleFields.filter(f => f.key !== 'efficiency_score')"
+                  :key="field.key"
+                  :class="['scale-item', activeScaleHelp === scaleHelpId('predictNext', field.key) ? 'help-open' : '']"
+                >
+                  <div class="scale-label-wrap">
+                    <button
+                      class="scale-help-trigger"
+                      type="button"
+                      :aria-label="`${field.label}评分说明`"
+                      :aria-expanded="activeScaleHelp === scaleHelpId('predictNext', field.key)"
+                      @click="toggleScaleHelp(scaleHelpId('predictNext', field.key))"
+                    >
+                      ?
+                    </button>
+                    <span>{{ field.label }}</span>
+                    <transition name="help-pop">
+                      <div v-if="activeScaleHelp === scaleHelpId('predictNext', field.key)" class="scale-help-popover" role="tooltip">
+                        <strong>{{ field.label }}评分说明</strong>
+                        <ul>
+                          <li v-for="item in field.descriptions" :key="item">{{ item }}</li>
+                        </ul>
+                      </div>
+                    </transition>
+                  </div>
+                  <van-stepper v-model="predictNextForm[field.key]" min="1" max="5" integer />
+                </div>
+              </div>
+
+              <div class="action-block">
+                <van-button round block type="primary" native-type="submit" :loading="predictingNext">预测效率</van-button>
+              </div>
+            </van-form>
+
+            <section v-if="predictNextResult" class="prediction-box" style="margin-top: 12px;">
               <div>
-                <span>预测等级</span>
-                <strong :class="['prediction-label', latestPrediction.predicted_label]">
-                  {{ labelText(latestPrediction.predicted_label) }}
+                <span>预期效率等级</span>
+                <strong :class="['prediction-label', predictNextResult.predicted_label]">
+                  {{ labelMap[predictNextResult.predicted_label] }}
                 </strong>
               </div>
               <div>
                 <span>置信度</span>
-                <strong>{{ formatPercent(latestPrediction.confidence) }}</strong>
+                <strong>{{ formatPercent(predictNextResult.confidence) }}</strong>
               </div>
-              <p>{{ latestPrediction.suggestion }}</p>
+              <p>{{ predictNextResult.suggestion }}</p>
+            </section>
+
+            <section v-if="predictNextResult?.feature_suggestions?.length" style="margin-top: 12px;">
+              <h4 style="margin-bottom: 8px; font-size: 14px;">优化建议：调整以下参数可提升预测等级</h4>
+              <div class="suggestion-list">
+                <article v-for="item in predictNextResult.feature_suggestions" :key="item.field" class="suggestion-item active">
+                  <strong>{{ item.field_label }}</strong>
+                  <span>{{ item.current_value }} → {{ item.suggested_value }}</span>
+                  <p>预测等级将从 {{ item.impact }}</p>
+                </article>
+              </div>
+            </section>
+
+            <div v-if="predictNextResult" class="action-block" style="margin-top: 12px;">
+              <van-button round block type="primary" :loading="loading" @click="handleStartWithPrediction">
+                用此参数开始学习
+              </van-button>
             </div>
-            <p v-else class="empty-hint">当前还没有预测结果。若已经训练模型，可先点击“预测最近记录”。</p>
           </section>
 
           <section class="dashboard-panel">
