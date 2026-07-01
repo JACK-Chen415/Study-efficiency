@@ -1488,11 +1488,8 @@ async function handleDeleteRecord(record) {
             正在校验学习状态
           </van-button>
           <template v-else-if="!hasActiveSession">
-            <van-button round block type="primary" :loading="loading" @click="go('dashboard')">
-              预测下一次学习效率
-            </van-button>
-            <van-button round block plain type="primary" :loading="loading" @click="handleStart">
-              直接开始学习
+            <van-button round block type="primary" :loading="loading" @click="handleStart">
+              开始学习
             </van-button>
           </template>
           <van-button v-else round block type="primary" @click="continueActiveStudy">继续当前学习</van-button>
